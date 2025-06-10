@@ -499,10 +499,7 @@ class _SoccerBallDetectionScreenState extends State<SoccerBallDetectionScreen> {
     final inputTensor = input.reshape([1, INPUT_SIZE, INPUT_SIZE, 3]);
 
     // Prepare output tensor
-    final outputTensor = List.generate(
-      1,
-      (_) => List.generate(84, (_) => List.filled(8400, 0.0)),
-    );
+   final outputTensor = List.generate(1, (_) => List.generate(84, (_) => List.filled(8400, 0.0)));
 
     // Run inference
     _interpreter!.run(inputTensor, outputTensor);
@@ -514,34 +511,33 @@ class _SoccerBallDetectionScreenState extends State<SoccerBallDetectionScreen> {
       image.height,
     );
 
+    print(_interpreter!.getOutputTensors()[0].shape);
+
     return detections;
   }
 
   // Post-process YOLO output
   List<Detection> _postProcessOutput(
-    List<List<double>> output,
+    List<List<double>> output, // output shape: [84][8400]
     int originalWidth,
     int originalHeight,
   ) {
     List<Detection> detections = [];
 
-    for (int i = 0; i < output.length; i++) {
-      final List<double> detection = output[i];
+    // Transpose output: [84][8400] -> [8400][84]
+    for (int i = 0; i < output[0].length; i++) {
+      List<double> detection = List.generate(output.length, (j) => output[j][i]);
 
-      // Extract detection data
       final double centerX = detection[0];
       final double centerY = detection[1];
       final double width = detection[2];
       final double height = detection[3];
       final double confidence = detection[4];
 
-      // Check if confidence is above threshold
       if (confidence < CONFIDENCE_THRESHOLD) continue;
 
-      // Get class scores
       final List<double> classScores = detection.sublist(5);
 
-      // Find class with highest score
       double maxScore = 0;
       int classId = -1;
       for (int j = 0; j < classScores.length; j++) {
@@ -551,13 +547,11 @@ class _SoccerBallDetectionScreenState extends State<SoccerBallDetectionScreen> {
         }
       }
 
-      // Only keep soccer ball detections (class_id = 32)
       if (classId != SOCCER_BALL_CLASS_ID) continue;
 
       final double finalConfidence = confidence * maxScore;
       if (finalConfidence < CONFIDENCE_THRESHOLD) continue;
 
-      // Convert to original image coordinates
       final double scaleX = originalWidth / INPUT_SIZE;
       final double scaleY = originalHeight / INPUT_SIZE;
 
@@ -575,7 +569,6 @@ class _SoccerBallDetectionScreenState extends State<SoccerBallDetectionScreen> {
       );
     }
 
-    // Apply Non-Maximum Suppression
     return _applyNMS(detections);
   }
 
